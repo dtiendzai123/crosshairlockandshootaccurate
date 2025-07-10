@@ -36,6 +36,23 @@ class Quaternion {
   constructor(x, y, z, w) {
     this.x = x; this.y = y; this.z = z; this.w = w;
   }
+
+  // Xoay một Vector3 bằng Quaternion này
+  multiplyVector3(v) {
+    const qx = this.x, qy = this.y, qz = this.z, qw = this.w;
+    const x = v.x, y = v.y, z = v.z;
+
+    const ix =  qw * x + qy * z - qz * y;
+    const iy =  qw * y + qz * x - qx * z;
+    const iz =  qw * z + qx * y - qy * x;
+    const iw = -qx * x - qy * y - qz * z;
+
+    return new Vector3(
+      ix * qw + iw * -qx + iy * -qz - iz * -qy,
+      iy * qw + iw * -qy + iz * -qx - ix * -qz,
+      iz * qw + iw * -qz + ix * -qy - iy * -qx
+    );
+  }
 }
 
 // ===== Matrix4 Class =====
@@ -45,7 +62,6 @@ class Matrix4 {
   }
 
   static fromBindpose(data) {
-    // Chuyển bindpose object thành ma trận 4x4
     const e = new Float32Array(16);
     e[0] = data.e00; e[1] = data.e10; e[2] = data.e20; e[3] = data.e30;
     e[4] = data.e01; e[5] = data.e11; e[6] = data.e21; e[7] = data.e31;
@@ -125,7 +141,9 @@ class BoneHeadTracker {
 
   getHeadPositionFromBoneData(offset = new Vector3(0, 0, 0)) {
     if (!this.boneHeadMatrix) return null;
-    return offset.applyMatrix4(this.boneHeadMatrix);
+
+    const rotatedOffset = this.boneHeadRotation.multiplyVector3(offset);
+    return this.boneHeadPosition.add(rotatedOffset);
   }
 }
 
@@ -138,10 +156,8 @@ class CrosshairLock {
   lockTo(target, threshold = 0.005) {
     const dist = this.crosshair.distanceTo(target);
     if (dist <= threshold) {
-      // Đã lock chính xác
       return true;
     } else {
-      // Cập nhật crosshair tiến gần target
       this.crosshair = target;
       return false;
     }
@@ -152,7 +168,7 @@ class CrosshairLock {
   }
 }
 
-// ===== TriggerShoot Class (ví dụ) =====
+// ===== TriggerShoot Class =====
 class TriggerShoot {
   constructor() {
     this.isShooting = false;
@@ -162,7 +178,6 @@ class TriggerShoot {
     if (isLocked && !this.isShooting) {
       this.isShooting = true;
       console.log("🔫 Trigger SHOOT!");
-      // Ở đây bạn có thể tích hợp gọi API hoặc thao tác bắn thực tế
     }
     if (!isLocked && this.isShooting) {
       this.isShooting = false;
@@ -188,41 +203,48 @@ const boneHeadData = {
 const headTracker = new BoneHeadTracker(bindposeData, boneHeadData);
 const crosshairLock = new CrosshairLock();
 const triggerShoot = new TriggerShoot();
+function chooseBestHeadTarget(crosshair, headTracker) {
+  let bestTarget = null;
+  let minDistance = Infinity;
 
-// Offset nếu muốn căn chỉnh vị trí head chính xác hơn (vd: nâng lên 0.15 unit)
-const headOffset = new Vector3(0, 0.15, 0);
+  for (const key in headOffsets) {
+    const offset = headOffsets[key];
+    const rotatedOffset = headTracker.boneHeadRotation.multiplyVector3(offset);
+    const target = headTracker.boneHeadPosition.add(rotatedOffset);
+
+    const dist = crosshair.distanceTo(target);
+    if (dist < minDistance) {
+      minDistance = dist;
+      bestTarget = target;
+    }
+  }
+
+  return bestTarget;
+}
+
+const headOffsets = {
+  forehead: new Vector3(0, 0.15, 0),
+  eyes: new Vector3(0, 0.05, 0.05),
+  top: new Vector3(0, 0.2, 0),
+  chin: new Vector3(0, -0.1, 0),
+};
+
 
 function mainLoop() {
-  // Lấy vị trí head từ bindpose
-  const headPosBindpose = headTracker.getHeadPositionFromBindpose(headOffset);
-  // Lấy vị trí head từ bone head data
-  const headPosBoneData = headTracker.getHeadPositionFromBoneData(headOffset);
+  // Tự động chọn điểm head gần nhất với crosshair hiện tại
+  const targetPos = chooseBestHeadTarget(crosshairLock.getPosition(), headTracker);
 
-  // Chọn 1 trong 2 (hoặc trung bình)
-  let targetPos;
-  if (headPosBoneData) {
-    targetPos = headPosBoneData;
-  } else if (headPosBindpose) {
-    targetPos = headPosBindpose;
-  } else {
+  if (!targetPos) {
     console.warn("Không có dữ liệu vị trí head");
     return;
   }
 
-  // Lock crosshair vào vị trí head
   const isLocked = crosshairLock.lockTo(targetPos);
-
-  // Bắn khi lock chính xác
   triggerShoot.tryShoot(isLocked);
 
-  // Log trạng thái
   console.log("Crosshair:", crosshairLock.getPosition().toFixed());
   console.log("Target Head:", targetPos.toFixed());
   console.log("Locked:", isLocked);
 
-  // Tiếp tục vòng lặp
   setTimeout(mainLoop, 16); // ~60fps
 }
-
-console.log("🚀 Bắt đầu Bone Head Tracking + Auto Shoot");
-mainLoop();
