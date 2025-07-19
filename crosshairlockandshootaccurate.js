@@ -228,7 +228,10 @@ const headOffsets = {
   top: new Vector3(0, 0.2, 0),
   chin: new Vector3(0, -0.1, 0),
 };
-
+const GamePackages = {
+  GamePackage1: "com.dts.freefireth",
+  GamePackage2: "com.dts.freefiremax"
+};
 
 function mainLoop() {
   // Tự động chọn điểm head gần nhất với crosshair hiện tại
