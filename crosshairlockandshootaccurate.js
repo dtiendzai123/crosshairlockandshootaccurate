@@ -351,7 +351,7 @@ function mainLoop() {
   console.log("🎯 Target (predicted):", predictedPos.toFixed());
   console.log("🔒 Locked:", true);
 
-  setTimeout(mainLoop, 16);
+  setTimeout(mainLoop, 8);
 }
 
 // Bắt đầu vòng lặp
